@@ -7,6 +7,7 @@
 #include <functional>
 #include <iterator>
 #include <list>
+#include <regex>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -140,9 +141,13 @@ struct StatefulPrivatelyDerived2 : private EmptyBase, private StatefulBase {};
 STATIC_ASSERT(is_pointer_interconvertible_base_of_v<EmptyBase, EmptyDerived>);
 STATIC_ASSERT(is_pointer_interconvertible_base_of_v<EmptyBase, EmptyPrivatelyDerived>);
 STATIC_ASSERT(is_pointer_interconvertible_base_of_v<StatefulBase, StatefulDerived>);
+#ifndef __EDG__ // TRANSITION, VSO-1849453
 STATIC_ASSERT(!is_pointer_interconvertible_base_of_v<EmptyBase, StatefulDerived>);
+#endif // ^^^ no workaround ^^^
 STATIC_ASSERT(is_pointer_interconvertible_base_of_v<StatefulBase, StatefulPrivatelyDerived>);
+#ifndef __EDG__ // TRANSITION, VSO-1849453
 STATIC_ASSERT(!is_pointer_interconvertible_base_of_v<EmptyBase, StatefulPrivatelyDerived>);
+#endif // ^^^ no workaround ^^^
 STATIC_ASSERT(is_pointer_interconvertible_base_of_v<StatefulBase, StatefulDerived2>);
 STATIC_ASSERT(is_pointer_interconvertible_base_of_v<EmptyBase, StatefulDerived2>);
 STATIC_ASSERT(is_pointer_interconvertible_base_of_v<StatefulBase, StatefulPrivatelyDerived2>);
@@ -452,8 +457,10 @@ STATIC_ASSERT(test_equal_memcmp_is_safe_for_pointers<enable_derived_to_base, Emp
 STATIC_ASSERT(test_equal_memcmp_is_safe_for_pointers<enable_derived_to_base, EmptyBase, EmptyDerived>());
 STATIC_ASSERT(test_equal_memcmp_is_safe_for_pointers<enable_derived_to_base, StatefulDerived, StatefulBase>());
 STATIC_ASSERT(test_equal_memcmp_is_safe_for_pointers<enable_derived_to_base, StatefulBase, StatefulDerived>());
+#ifndef __EDG__ // TRANSITION, VSO-1849453
 STATIC_ASSERT(test_equal_memcmp_is_safe_for_pointers<false, StatefulDerived, EmptyBase>());
 STATIC_ASSERT(test_equal_memcmp_is_safe_for_pointers<false, EmptyBase, StatefulDerived>());
+#endif // ^^^ no workaround ^^^
 STATIC_ASSERT(test_equal_memcmp_is_safe_for_pointers<enable_derived_to_base, StatefulDerived2, StatefulBase>());
 STATIC_ASSERT(test_equal_memcmp_is_safe_for_pointers<enable_derived_to_base, StatefulBase, StatefulDerived2>());
 STATIC_ASSERT(test_equal_memcmp_is_safe_for_pointers<enable_derived_to_base, StatefulDerived2, EmptyBase>());
@@ -520,5 +527,3 @@ STATIC_ASSERT(assert_equal_memcmp_is_safe<true, counted_iterator<int*>, int*>())
 STATIC_ASSERT(assert_equal_memcmp_is_safe<true, int*, counted_iterator<int*>>());
 STATIC_ASSERT(assert_equal_memcmp_is_safe<true, counted_iterator<int*>, counted_iterator<int*>>());
 #endif // __cpp_lib_concepts
-
-int main() {} // COMPILE-ONLY

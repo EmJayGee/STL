@@ -309,9 +309,13 @@ struct StatefulPrivatelyDerived2 : private EmptyBase, private StatefulBase {};
 STATIC_ASSERT(is_pointer_interconvertible_base_of_v<EmptyBase, EmptyDerived>);
 STATIC_ASSERT(is_pointer_interconvertible_base_of_v<EmptyBase, EmptyPrivatelyDerived>);
 STATIC_ASSERT(is_pointer_interconvertible_base_of_v<StatefulBase, StatefulDerived>);
+#ifndef __EDG__ // TRANSITION, VSO-1849453
 STATIC_ASSERT(!is_pointer_interconvertible_base_of_v<EmptyBase, StatefulDerived>);
+#endif // ^^^ no workaround ^^^
 STATIC_ASSERT(is_pointer_interconvertible_base_of_v<StatefulBase, StatefulPrivatelyDerived>);
+#ifndef __EDG__ // TRANSITION, VSO-1849453
 STATIC_ASSERT(!is_pointer_interconvertible_base_of_v<EmptyBase, StatefulPrivatelyDerived>);
+#endif // ^^^ no workaround ^^^
 STATIC_ASSERT(is_pointer_interconvertible_base_of_v<StatefulBase, StatefulDerived2>);
 STATIC_ASSERT(is_pointer_interconvertible_base_of_v<EmptyBase, StatefulDerived2>);
 STATIC_ASSERT(is_pointer_interconvertible_base_of_v<StatefulBase, StatefulPrivatelyDerived2>);
@@ -482,5 +486,3 @@ void iter_cat_test_cases() {
     test_iter_cat_for_containers<false, array<int, 8>, array<volatile int, 8>>();
     test_iter_cat_for_containers<false, array<volatile int, 8>, array<volatile int, 8>>();
 }
-
-int main() {} // COMPILE-ONLY

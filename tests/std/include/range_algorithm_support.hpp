@@ -12,10 +12,6 @@
 #include <type_traits>
 #include <utility>
 
-#ifdef _M_CEE // TRANSITION, VSO-1659408
-#include <memory>
-#endif // ^^^ workaround ^^^
-
 #define STATIC_ASSERT(...) static_assert(__VA_ARGS__, #__VA_ARGS__)
 
 namespace ranges = std::ranges;
@@ -24,7 +20,7 @@ template <class>
 inline constexpr bool always_false = false;
 
 namespace detail {
-    static constexpr bool permissive() {
+    constexpr bool permissive() {
         return false;
     }
 
@@ -68,25 +64,15 @@ struct boolish {
     }
 };
 
-template <class T, size_t N>
+template <class T, std::size_t N>
 struct holder {
-    STATIC_ASSERT(N < ~size_t{0} / sizeof(T));
+    STATIC_ASSERT(N < ~std::size_t{0} / sizeof(T));
 
-#ifdef _M_CEE // TRANSITION, VSO-1659408
-    unsigned char space[(N + 1) * sizeof(T)];
-
-    auto as_span() {
-        void* buffer_ptr  = space;
-        size_t buffer_len = sizeof(space);
-        return std::span<T, N>{static_cast<T*>(std::align(alignof(T), sizeof(T), buffer_ptr, buffer_len)), N};
-    }
-#else // ^^^ workaround / no workaround vvv
     alignas(T) unsigned char space[N * sizeof(T)];
 
     auto as_span() {
         return std::span<T, N>{reinterpret_cast<T*>(space + 0), N};
     }
-#endif // ^^^ no workaround ^^^
 };
 
 namespace test {
@@ -112,7 +98,7 @@ namespace test {
 
     enum class CanDifference : bool { no, yes };
     enum class CanCompare : bool { no, yes };
-    enum class ProxyRef { no, yes, prvalue };
+    enum class ProxyRef { no, yes, prvalue, xvalue };
     enum class WrappedState {
         wrapped,
         unwrapped,
@@ -200,33 +186,33 @@ namespace test {
 
     template <class T, class U>
     concept CanEq = requires(T const& t, U const& u) {
-                        { t == u } -> convertible_to<bool>;
-                    };
+        { t == u } -> convertible_to<bool>;
+    };
 
     template <class T, class U>
     concept CanNEq = requires(T const& t, U const& u) {
-                         { t != u } -> convertible_to<bool>;
-                     };
+        { t != u } -> convertible_to<bool>;
+    };
 
     template <class T, class U>
     concept CanLt = requires(T const& t, U const& u) {
-                        { t < u } -> convertible_to<bool>;
-                    };
+        { t < u } -> convertible_to<bool>;
+    };
 
     template <class T, class U>
     concept CanLtE = requires(T const& t, U const& u) {
-                         { t <= u } -> convertible_to<bool>;
-                     };
+        { t <= u } -> convertible_to<bool>;
+    };
 
     template <class T, class U>
     concept CanGt = requires(T const& t, U const& u) {
-                        { t > u } -> convertible_to<bool>;
-                    };
+        { t > u } -> convertible_to<bool>;
+    };
 
     template <class T, class U>
     concept CanGtE = requires(T const& t, U const& u) {
-                         { t >= u } -> convertible_to<bool>;
-                     };
+        { t >= u } -> convertible_to<bool>;
+    };
 
     template <class Category, class Element>
     class proxy_reference {
@@ -245,11 +231,11 @@ namespace test {
             return *this;
         }
 
-        // clang-format off
-        constexpr operator Element&() const requires derived_from<Category, input> {
+        constexpr operator Element&() const
+            requires derived_from<Category, input>
+        {
             return ref_;
         }
-        // clang-format on
 
         template <class T>
             requires (!std::same_as<std::remove_cvref_t<T>, proxy_reference> && assignable_from<Element&, T>)
@@ -383,6 +369,39 @@ struct std::basic_common_reference<::test::proxy_reference<Cat1, Elem1>, ::test:
 };
 
 namespace test {
+    template <class T>
+    struct init_list_not_constructible_sentinel {
+        init_list_not_constructible_sentinel() = default;
+        init_list_not_constructible_sentinel(T*) {}
+
+        template <class U>
+        init_list_not_constructible_sentinel(std::initializer_list<U>) = delete;
+    };
+
+    template <class T>
+    struct init_list_not_constructible_iterator {
+        using iterator_category = std::forward_iterator_tag;
+        using difference_type   = int;
+        using value_type        = T;
+
+        init_list_not_constructible_iterator() = default;
+        init_list_not_constructible_iterator(T*) {}
+
+        template <class U>
+        init_list_not_constructible_iterator(std::initializer_list<U>) = delete;
+
+        T& operator*() const; // not defined
+        init_list_not_constructible_iterator& operator++(); // not defined
+        init_list_not_constructible_iterator operator++(int); // not defined
+
+        bool operator==(init_list_not_constructible_iterator) const; // not defined
+        bool operator==(init_list_not_constructible_sentinel<T>) const; // not defined
+    };
+
+    static_assert(std::forward_iterator<init_list_not_constructible_iterator<int>>);
+    static_assert(
+        std::sentinel_for<init_list_not_constructible_sentinel<int>, init_list_not_constructible_iterator<int>>);
+
     template <class Category, class Element,
         // Model sized_sentinel_for along with sentinel?
         CanDifference Diff = CanDifference{derived_from<Category, random>},
@@ -402,7 +421,8 @@ namespace test {
         static constexpr bool at_least = derived_from<Category, T>;
 
         using ReferenceType = conditional_t<Proxy == ProxyRef::yes, proxy_reference<Category, Element>,
-            conditional_t<Proxy == ProxyRef::prvalue, std::remove_cv_t<Element>, Element&>>;
+            conditional_t<Proxy == ProxyRef::prvalue, std::remove_cv_t<Element>,
+                conditional_t<Proxy == ProxyRef::xvalue, Element&&, Element&>>>;
 
         struct post_increment_proxy {
             Element* ptr_;
@@ -444,7 +464,7 @@ namespace test {
         }
 
         [[nodiscard]] constexpr ReferenceType operator*() const noexcept {
-            return ReferenceType{*ptr_};
+            return static_cast<ReferenceType>(*ptr_);
         }
 
         template <WrappedState OtherWrapped>
@@ -654,26 +674,23 @@ namespace test {
         }
 
         // sized_sentinel_for operations:
-        // clang-format off
         [[nodiscard]] constexpr ptrdiff_t operator-(iterator const& that) const noexcept
-            requires at_least<random> || (to_bool(Diff) && to_bool(Eq)) {
-            // clang-format on
+            requires at_least<random> || (to_bool(Diff) && to_bool(Eq))
+        {
             return ptr_ - that.ptr_;
         }
 
-        // clang-format off
         template <WrappedState OtherWrapped>
         [[nodiscard]] constexpr ptrdiff_t operator-(sentinel<Element, OtherWrapped> const& s) const noexcept
-            requires compatible_wrapped_state<Wrapped, OtherWrapped> && (to_bool(Diff)) {
-            // clang-format on
+            requires compatible_wrapped_state<Wrapped, OtherWrapped> && (to_bool(Diff))
+        {
             return ptr_ - s.peek();
         }
-        // clang-format off
         template <WrappedState OtherWrapped>
         [[nodiscard]] friend constexpr ptrdiff_t operator-(
             sentinel<Element, OtherWrapped> const& s, iterator const& i) noexcept
-            requires compatible_wrapped_state<Wrapped, OtherWrapped> && (to_bool(Diff)) {
-            // clang-format on
+            requires compatible_wrapped_state<Wrapped, OtherWrapped> && (to_bool(Diff))
+        {
             return -(i - s);
         }
 
@@ -851,7 +868,6 @@ namespace test {
         };
     } // namespace detail
 
-    // clang-format off
     template <class Category, class Element,
         // Implement member size? (NB: Not equivalent to "Is this a sized_range?")
         Sized IsSized = Sized::no,
@@ -867,10 +883,9 @@ namespace test {
         CanView IsView = CanView::no,
         // Should this range type be copyable/movable/neither?
         Copyability Copy = IsView == CanView::yes ? Copyability::move_only : Copyability::immobile>
-        requires (!to_bool(IsCommon) || to_bool(Eq))
-            && (to_bool(Eq) || !derived_from<Category, fwd>)
-            && (Proxy == ProxyRef::no || !derived_from<Category, contiguous>)
-            && (!to_bool(IsView) || Copy != Copyability::immobile)
+        requires (!to_bool(IsCommon) || to_bool(Eq)) && (to_bool(Eq) || !derived_from<Category, fwd>)
+              && (Proxy == ProxyRef::no || !derived_from<Category, contiguous>)
+              && (!to_bool(IsView) || Copy != Copyability::immobile)
     class range : public detail::range_base<Element, Copy> {
     private:
         mutable bool begin_called_ = false;
@@ -881,6 +896,8 @@ namespace test {
     public:
         using I = iterator<Category, Element, Diff, Eq, Proxy, WrappedState::wrapped>;
         using S = conditional_t<to_bool(IsCommon), I, sentinel<Element, WrappedState::wrapped>>;
+        using RebindAsMoveOnly =
+            range<Category, Element, IsSized, Diff, IsCommon, Eq, Proxy, IsView, Copyability::move_only>;
 
         using detail::range_base<Element, Copy>::range_base;
 
@@ -897,7 +914,9 @@ namespace test {
             return S{elements_.data() + elements_.size()};
         }
 
-        [[nodiscard]] constexpr ptrdiff_t size() const noexcept requires (to_bool(IsSized)) {
+        [[nodiscard]] constexpr ptrdiff_t size() const noexcept
+            requires (to_bool(IsSized))
+        {
             assert(!moved_from());
             if constexpr (!derived_from<Category, fwd>) {
                 assert(!begin_called_);
@@ -905,12 +924,14 @@ namespace test {
             return static_cast<ptrdiff_t>(elements_.size());
         }
 
-        [[nodiscard]] constexpr Element* data() const noexcept requires derived_from<Category, contiguous> {
+        [[nodiscard]] constexpr Element* data() const noexcept
+            requires derived_from<Category, contiguous>
+        {
             assert(!moved_from());
             return elements_.data();
         }
 
-        using UI = typename I::unwrap;
+        using UI = I::unwrap;
         using US = conditional_t<to_bool(IsCommon), UI, sentinel<Element, WrappedState::unwrapped>>;
 
         [[nodiscard]] constexpr UI _Unchecked_begin() const noexcept {
@@ -933,7 +954,6 @@ namespace test {
             STATIC_ASSERT(always_false<Category>);
         }
     };
-    // clang-format on
 } // namespace test
 
 template <class Category, class Element, test::Sized IsSized, test::CanDifference Diff, test::Common IsCommon,
@@ -1452,7 +1472,7 @@ constexpr void test_in_in_write() {
     with_input_ranges<with_input_ranges<with_writable_iterators<Instantiator, Element3>, Element2>, Element1>::call();
 }
 
-template <size_t I>
+template <std::size_t I>
 struct get_nth_fn {
     template <class T>
     [[nodiscard]] constexpr auto&& operator()(T&& t) const noexcept

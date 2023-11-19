@@ -216,12 +216,14 @@ void test_execution() {
     assert(count(execution::par, begin(arr), end(arr), 0) == 4);
 }
 
+#if TEST_STANDARD >= 23
 void test_expected() {
     using namespace std;
     puts("Testing <expected>.");
     constexpr expected<double, int> test{unexpect, 42};
     assert(test.error() == 42);
 }
+#endif // TEST_STANDARD >= 23
 
 void test_filesystem() {
     using namespace std;
@@ -331,7 +333,7 @@ void test_istream() {
 void test_iterator() {
     using namespace std;
     puts("Testing <iterator>.");
-    constexpr int arr[]{10, 20, 30, 40, 50};
+    static constexpr int arr[]{10, 20, 30, 40, 50};
     constexpr reverse_iterator<const int*> ri{end(arr)};
     assert(*ri == 50);
     assert(*next(ri) == 40);
@@ -388,6 +390,19 @@ void test_map() {
     map<int, int> m{{10, 11}, {20, 22}, {30, 33}, {40, 44}, {50, 55}};
     assert(m[30] == 33);
 }
+
+#if TEST_STANDARD >= 23
+void test_mdspan() {
+    using namespace std;
+    puts("Testing <mdspan>.");
+    int arr[] = {10, 0, 0, 0, 20, 0, 0, 0, 30};
+    layout_right::mapping<extents<int, 3, 3>> mp;
+    assert(arr[mp(0, 0)] == 10);
+    assert(arr[mp(1, 1)] == 20);
+    assert(arr[mp(2, 2)] == 30);
+    // TRANSITION, test std::mdspan too (DevCom-10359857)
+}
+#endif // TEST_STANDARD >= 23
 
 void test_memory() {
     using namespace std;
@@ -491,6 +506,18 @@ void test_ostream() {
     const ostream os{nullptr};
     assert(os.rdbuf() == nullptr);
 }
+
+#if TEST_STANDARD >= 23
+void test_print() {
+    using namespace std;
+    puts("Testing <print>.");
+    println("Hello, world!");
+
+#ifdef _CPPRTTI
+    println(cout, "The answer to life, the universe, and everything: {}", 42);
+#endif // _CPPRTTI
+}
+#endif // TEST_STANDARD >= 23
 
 void test_queue() {
     using namespace std;
@@ -651,12 +678,22 @@ constexpr bool impl_test_source_location() {
     using namespace std;
     const auto sl = source_location::current();
     assert(sl.line() == __LINE__ - 1);
-    assert(sl.column() == 1);
-#if defined(__clang__) || defined(__EDG__) // TRANSITION, DevCom-10199227 and LLVM-58951
-    assert(sl.function_name() == "impl_test_source_location"sv);
-#else // ^^^ workaround / no workaround vvv
+    assert(sl.column() == 38);
+
+#ifdef __EDG__ // TRANSITION, DevCom-10199227
+#define TEST_DETAILED_FUNCTION_NAME 0
+#elif defined(__clang__) // TRANSITION, Clang 17 has this builtin
+#define TEST_DETAILED_FUNCTION_NAME __has_builtin(__builtin_FUNCSIG)
+#else // ^^^ Clang / MSVC vvv
+#define TEST_DETAILED_FUNCTION_NAME 1
+#endif // ^^^ MSVC ^^^
+
+#if TEST_DETAILED_FUNCTION_NAME
     assert(sl.function_name() == "bool __cdecl impl_test_source_location(void)"sv);
-#endif // TRANSITION, DevCom-10199227 and LLVM-58951
+#else // ^^^ detailed / basic vvv
+    assert(sl.function_name() == "impl_test_source_location"sv);
+#endif // ^^^ basic ^^^
+
     assert(string_view{sl.file_name()}.ends_with("test_header_units_and_modules.hpp"sv));
     return true;
 }
@@ -671,13 +708,14 @@ void test_source_location() {
 void test_span() {
     using namespace std;
     puts("Testing <span>.");
-    constexpr int arr[]{11, 22, 33, 44, 55};
+    static constexpr int arr[]{11, 22, 33, 44, 55};
     constexpr span<const int, 5> whole{arr};
     constexpr span<const int, 3> mid = whole.subspan<1, 3>();
     assert(mid[0] == 22 && mid[1] == 33 && mid[2] == 44);
     static_assert(mid[0] == 22 && mid[1] == 33 && mid[2] == 44);
 }
 
+#if TEST_STANDARD >= 23
 void test_spanstream() {
     using namespace std;
     puts("Testing <spanstream>.");
@@ -710,6 +748,7 @@ void test_spanstream() {
     s << 10 << 20 << 30;
     assert(equal(begin(s.span()), end(s.span()), begin(expected_val), end(expected_val)));
 }
+#endif // TEST_STANDARD >= 23
 
 void test_sstream() {
     using namespace std;
@@ -736,6 +775,7 @@ void test_stack() {
     assert(s.empty());
 }
 
+#if TEST_STANDARD >= 23
 __declspec(dllexport) void test_stacktrace() { // export test_stacktrace to have it named even without debug info
     using namespace std;
     puts("Testing <stacktrace>.");
@@ -751,6 +791,7 @@ __declspec(dllexport) void test_stacktrace() { // export test_stacktrace to have
 
     assert(desc == "test_stacktrace");
 }
+#endif // TEST_STANDARD >= 23
 
 void test_stdexcept() {
     using namespace std;
@@ -767,6 +808,14 @@ void test_stdexcept() {
 
     assert(caught_puppies);
 }
+
+#if TEST_STANDARD >= 23
+void test_stdfloat() {
+    using namespace std;
+    puts("Testing <stdfloat>.");
+    // `namespace std` is available, so we're done.
+}
+#endif // TEST_STANDARD >= 23
 
 void test_stop_token() {
     using namespace std;
@@ -921,6 +970,8 @@ void test_typeinfo() {
     const type_info& t3 = typeid(double);
     assert(t1 == t2);
     assert(t1 != t3);
+
+    assert(typeid(double).name() == "double"sv); // also test DevCom-10349749
 }
 
 void test_unordered_map() {
@@ -1062,7 +1113,9 @@ void all_cpp_header_tests() {
     test_deque();
     test_exception();
     test_execution();
+#if TEST_STANDARD >= 23
     test_expected();
+#endif // TEST_STANDARD >= 23
     test_filesystem();
     test_format();
     test_forward_list();
@@ -1081,6 +1134,9 @@ void all_cpp_header_tests() {
     test_list();
     test_locale();
     test_map();
+#if TEST_STANDARD >= 23
+    test_mdspan();
+#endif // TEST_STANDARD >= 23
     test_memory();
     test_memory_resource();
     test_mutex();
@@ -1089,6 +1145,9 @@ void all_cpp_header_tests() {
     test_numeric();
     test_optional();
     test_ostream();
+#if TEST_STANDARD >= 23
+    test_print();
+#endif // TEST_STANDARD >= 23
     test_queue();
     test_random();
     test_ranges();
@@ -1100,11 +1159,18 @@ void all_cpp_header_tests() {
     test_shared_mutex();
     test_source_location();
     test_span();
+#if TEST_STANDARD >= 23
     test_spanstream();
+#endif // TEST_STANDARD >= 23
     test_sstream();
     test_stack();
+#if TEST_STANDARD >= 23
     test_stacktrace();
+#endif // TEST_STANDARD >= 23
     test_stdexcept();
+#if TEST_STANDARD >= 23
+    test_stdfloat();
+#endif // TEST_STANDARD >= 23
     test_stop_token();
     test_streambuf();
     test_string();

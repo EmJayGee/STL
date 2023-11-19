@@ -30,11 +30,11 @@ namespace {
     _STD shared_mutex _Lookup_mutex;
 } // unnamed namespace
 
-_EXTERN_C
+extern "C" {
 
 // TRANSITION, ABI: This returns a pointer to a C++ type.
 // A flat C interface would return an opaque handle and would provide separate functions for locking and unlocking.
-_NODISCARD _STD shared_mutex* __stdcall __std_acquire_shared_mutex_for_instance(void* _Ptr) noexcept {
+[[nodiscard]] _STD shared_mutex* __stdcall __std_acquire_shared_mutex_for_instance(void* _Ptr) noexcept {
     try {
         _STD scoped_lock _Guard(_Lookup_mutex);
         auto& [_Mutex, _Refs] = _Lookup_map.try_emplace(_Ptr).first->second;
@@ -55,4 +55,4 @@ void __stdcall __std_release_shared_mutex_for_instance(void* _Ptr) noexcept {
     }
 }
 
-_END_EXTERN_C
+} // extern "C"

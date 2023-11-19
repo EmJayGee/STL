@@ -741,7 +741,7 @@ struct BaseMeow {
 };
 
 struct DerivedMeow : BaseMeow {
-    virtual int operator()(int x, int y) override {
+    int operator()(int x, int y) override {
         return x * x * x + y * y * y;
     }
 };
@@ -1049,10 +1049,9 @@ void test_reference_wrapper_invocation() {
 }
 
 
-// Test C++17 invoke().
-#if _HAS_CXX17
+// Test invoke().
 constexpr bool test_invoke_constexpr() {
-    // MSVC implements LWG-2894 in C++17 and later
+    // MSVC implements LWG-2894 unconditionally
     Thing thing;
     auto p = &thing;
 
@@ -1076,13 +1075,10 @@ constexpr bool test_invoke_constexpr() {
     assert(invoke(&cube_constexpr, 7) == 343);
     return true;
 }
-#endif // _HAS_CXX17
 
 void test_invoke() {
-#if _HAS_CXX17
     assert(test_invoke_constexpr());
     STATIC_ASSERT(test_invoke_constexpr());
-#endif // _HAS_CXX17
 
     auto sp = make_shared<Thing>();
 
@@ -1615,6 +1611,11 @@ void test_function() {
         assert(f.target<short (*)(long)>() == nullptr);
         assert(c.target<short (*)(long)>() == nullptr);
 
+        assert(f.target<int(int)>() == nullptr);
+        assert(c.target<int(int)>() == nullptr);
+        assert(f.target<short(long)>() == nullptr);
+        assert(c.target<short(long)>() == nullptr);
+
         f = triple;
         assert(f(1000) == 3000);
         assert(f.target_type() == typeid(int (*)(int)));
@@ -1623,6 +1624,11 @@ void test_function() {
         assert(f.target<short (*)(long)>() == nullptr);
         assert(c.target<short (*)(long)>() == nullptr);
 
+        assert(f.target<int(int)>() == nullptr);
+        assert(c.target<int(int)>() == nullptr);
+        assert(f.target<short(long)>() == nullptr);
+        assert(c.target<short(long)>() == nullptr);
+
         f = short_long;
         assert(f(1000) == 29);
         assert(f.target_type() == typeid(short (*)(long)));
@@ -1630,6 +1636,11 @@ void test_function() {
         assert(c.target<int (*)(int)>() == nullptr);
         assert(*f.target<short (*)(long)>() == &short_long);
         assert(*c.target<short (*)(long)>() == &short_long);
+
+        assert(f.target<int(int)>() == nullptr);
+        assert(c.target<int(int)>() == nullptr);
+        assert(f.target<short(long)>() == nullptr);
+        assert(c.target<short(long)>() == nullptr);
     }
 
 
@@ -2340,6 +2351,62 @@ _CONSTEXPR20 bool test_not_fn() {
 #endif // _HAS_CXX17
     return true;
 }
+
+// Also test the invocability of the return type of std::not_fn before and after the changes in P0356R5.
+#if _HAS_CXX17
+struct ConstOnlyFunctor {
+    bool operator()() = delete;
+    bool operator()() const {
+        return true;
+    }
+};
+
+struct ConstOnlyBooleanTester {
+    void operator()() {}
+    bool operator()() const {
+        return true;
+    }
+};
+
+struct GetPinnedNegatable {
+    struct PinnedNegatable {
+        PinnedNegatable() = default;
+
+        PinnedNegatable(const PinnedNegatable&)            = delete;
+        PinnedNegatable& operator=(const PinnedNegatable&) = delete;
+
+        friend bool operator!(PinnedNegatable) {
+            return false;
+        }
+    };
+
+    PinnedNegatable operator()() const {
+        return {};
+    }
+};
+
+using NegatedConstOnlyFunctor       = decltype(not_fn(ConstOnlyFunctor{}));
+using NegatedConstOnlyBooleanTester = decltype(not_fn(ConstOnlyBooleanTester{}));
+using NegatedGetPinnedNegatable     = decltype(not_fn(GetPinnedNegatable{}));
+
+#if _HAS_CXX20
+constexpr bool not_fn_is_perfect_forwarding = true;
+#else // ^^^ _HAS_CXX20 / !_HAS_CXX20 vvv
+constexpr bool not_fn_is_perfect_forwarding = false;
+#endif // ^^^ !_HAS_CXX20 ^^^
+
+static_assert(is_invocable_v<const NegatedConstOnlyFunctor>);
+static_assert(is_invocable_v<const NegatedConstOnlyFunctor&>);
+static_assert(is_invocable_v<const NegatedConstOnlyBooleanTester>);
+static_assert(is_invocable_v<const NegatedConstOnlyBooleanTester&>);
+
+static_assert(is_invocable_v<NegatedConstOnlyFunctor> == !not_fn_is_perfect_forwarding);
+static_assert(is_invocable_v<NegatedConstOnlyFunctor&> == !not_fn_is_perfect_forwarding);
+static_assert(is_invocable_v<NegatedConstOnlyBooleanTester> == !not_fn_is_perfect_forwarding);
+static_assert(is_invocable_v<NegatedConstOnlyBooleanTester&> == !not_fn_is_perfect_forwarding);
+
+static_assert(is_invocable_v<NegatedGetPinnedNegatable> == not_fn_is_perfect_forwarding);
+#endif // _HAS_CXX17
 
 int main() {
     // Test addressof() with functions.

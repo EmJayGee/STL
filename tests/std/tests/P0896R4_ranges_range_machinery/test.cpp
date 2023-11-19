@@ -121,6 +121,25 @@ STATIC_ASSERT(test_cpo(ranges::views::take_while));
 STATIC_ASSERT(test_cpo(ranges::views::transform));
 STATIC_ASSERT(test_cpo(ranges::views::values));
 
+#if _HAS_CXX23
+STATIC_ASSERT(test_cpo(ranges::views::adjacent<3>));
+STATIC_ASSERT(test_cpo(ranges::views::adjacent_transform<3>));
+STATIC_ASSERT(test_cpo(ranges::views::as_const));
+STATIC_ASSERT(test_cpo(ranges::views::as_rvalue));
+STATIC_ASSERT(test_cpo(ranges::views::cartesian_product));
+STATIC_ASSERT(test_cpo(ranges::views::chunk));
+STATIC_ASSERT(test_cpo(ranges::views::chunk_by));
+STATIC_ASSERT(test_cpo(ranges::views::enumerate));
+STATIC_ASSERT(test_cpo(ranges::views::join_with));
+STATIC_ASSERT(test_cpo(ranges::views::pairwise));
+STATIC_ASSERT(test_cpo(ranges::views::pairwise_transform));
+STATIC_ASSERT(test_cpo(ranges::views::repeat));
+STATIC_ASSERT(test_cpo(ranges::views::slide));
+STATIC_ASSERT(test_cpo(ranges::views::stride));
+STATIC_ASSERT(test_cpo(ranges::views::zip));
+STATIC_ASSERT(test_cpo(ranges::views::zip_transform));
+#endif // _HAS_CXX23
+
 void test_cpo_ambiguity() {
     using namespace std::ranges;
 
@@ -399,6 +418,12 @@ constexpr bool test_input_range() {
     STATIC_ASSERT(std::same_as<ranges::range_rvalue_reference_t<Range&>, RvalueReference>);
     STATIC_ASSERT(std::same_as<ranges::range_rvalue_reference_t<Range&&>, RvalueReference>);
 
+    // LWG-3860, validate ranges::range_common_reference_t
+    using CommonReference = std::iter_common_reference_t<Iterator>;
+    STATIC_ASSERT(std::same_as<ranges::range_common_reference_t<Range>, CommonReference>);
+    STATIC_ASSERT(std::same_as<ranges::range_common_reference_t<Range&>, CommonReference>);
+    STATIC_ASSERT(std::same_as<ranges::range_common_reference_t<Range&&>, CommonReference>);
+
     return true;
 }
 
@@ -660,6 +685,20 @@ struct initially_incomplete;
 extern initially_incomplete array_of_incomplete[42];
 STATIC_ASSERT(ranges::size(array_of_incomplete) == 42);
 STATIC_ASSERT(!ranges::empty(array_of_incomplete));
+
+// begin, end, rbegin, rend, and data (and their c variations) should reject rvalues of array of incomplete elements
+// with substitution failures
+STATIC_ASSERT(!CanBegin<initially_incomplete (&&)[42]>);
+STATIC_ASSERT(!CanCBegin<initially_incomplete (&&)[42]>);
+STATIC_ASSERT(!CanEnd<initially_incomplete (&&)[42]>);
+STATIC_ASSERT(!CanCEnd<initially_incomplete (&&)[42]>);
+STATIC_ASSERT(!CanRBegin<initially_incomplete (&&)[42]>);
+STATIC_ASSERT(!CanCRBegin<initially_incomplete (&&)[42]>);
+STATIC_ASSERT(!CanREnd<initially_incomplete (&&)[42]>);
+STATIC_ASSERT(!CanCREnd<initially_incomplete (&&)[42]>);
+STATIC_ASSERT(!CanData<initially_incomplete (&&)[42]>);
+STATIC_ASSERT(!CanCData<initially_incomplete (&&)[42]>);
+
 struct initially_incomplete {};
 initially_incomplete array_of_incomplete[42];
 
@@ -734,18 +773,18 @@ constexpr bool is_forward_list<std::forward_list<T, A>> = true;
 
 template <class T, class IterConcept>
 constexpr bool test_std_container() {
-    using I  = typename T::iterator;
+    using I  = T::iterator;
     using D  = std::iter_difference_t<I>;
-    using CI = typename T::const_iterator;
+    using CI = T::const_iterator;
     STATIC_ASSERT(std::same_as<std::iter_difference_t<CI>, D>);
 
-    using Category = typename std::iterator_traits<I>::iterator_category;
+    using Category = std::iterator_traits<I>::iterator_category;
     STATIC_ASSERT(std::derived_from<IterConcept, Category>);
 
     using RI  = std::conditional_t<std::bidirectional_iterator<I>, std::reverse_iterator<I>, invalid_type>;
     using RCI = std::conditional_t<std::bidirectional_iterator<I>, std::reverse_iterator<CI>, invalid_type>;
 
-    using V = typename T::value_type;
+    using V = T::value_type;
 
     STATIC_ASSERT(test_begin<T>());
     STATIC_ASSERT(test_end<T>());
@@ -1350,93 +1389,131 @@ constexpr bool test_array_ish() { // An actual runtime test!
 }
 
 namespace nothrow_testing {
-    // clang-format off
     template <unsigned int I, bool NoThrow>
     struct range {
         int elements_[3];
 
         // begin/end are members for I == 0, and non-members otherwise
-        int* begin() noexcept(NoThrow) requires (I == 0) {
+        int* begin() noexcept(NoThrow)
+            requires (I == 0)
+        {
             return elements_;
         }
-        int* end() noexcept(NoThrow) requires (I == 0) {
+        int* end() noexcept(NoThrow)
+            requires (I == 0)
+        {
             return elements_ + 3;
         }
-        int const* begin() const noexcept(NoThrow) requires (I == 0) {
+        int const* begin() const noexcept(NoThrow)
+            requires (I == 0)
+        {
             return elements_;
         }
-        int const* end() const noexcept(NoThrow) requires (I == 0) {
+        int const* end() const noexcept(NoThrow)
+            requires (I == 0)
+        {
             return elements_ + 3;
         }
 
         // rbegin/rend are members for I == 0, not provided for I == 1, and non-members otherwise
         // (Not providing operations allows us to test the library-provided fallback behavior)
-        int* rbegin() noexcept(NoThrow) requires (I == 0) {
+        int* rbegin() noexcept(NoThrow)
+            requires (I == 0)
+        {
             return elements_;
         }
-        int* rend() noexcept(NoThrow) requires (I == 0) {
+        int* rend() noexcept(NoThrow)
+            requires (I == 0)
+        {
             return elements_ + 3;
         }
-        int const* rbegin() const noexcept(NoThrow) requires (I == 0) {
+        int const* rbegin() const noexcept(NoThrow)
+            requires (I == 0)
+        {
             return elements_;
         }
-        int const* rend() const noexcept(NoThrow) requires (I == 0) {
+        int const* rend() const noexcept(NoThrow)
+            requires (I == 0)
+        {
             return elements_ + 3;
         }
 
         // empty is not provided when I == 1
-        bool empty() const noexcept(NoThrow) requires (I != 1) {
+        bool empty() const noexcept(NoThrow)
+            requires (I != 1)
+        {
             return false;
         }
 
         // data is not provided when I == 2
-        int* data() noexcept(NoThrow) requires (I != 2) {
+        int* data() noexcept(NoThrow)
+            requires (I != 2)
+        {
             return elements_;
         }
-        int const* data() const noexcept(NoThrow) requires (I != 2) {
+        int const* data() const noexcept(NoThrow)
+            requires (I != 2)
+        {
             return elements_;
         }
 
         // size is not provided when I == 3
-        std::size_t size() const noexcept(NoThrow) requires (I != 3) {
+        std::size_t size() const noexcept(NoThrow)
+            requires (I != 3)
+        {
             return 3;
         }
     };
 
     template <unsigned int I, bool NoThrow>
-    int* begin(range<I, NoThrow>& a) noexcept(NoThrow) requires (I != 0) {
+    int* begin(range<I, NoThrow>& a) noexcept(NoThrow)
+        requires (I != 0)
+    {
         return a.elements_;
     }
     template <unsigned int I, bool NoThrow>
-    int* end(range<I, NoThrow>& a) noexcept(NoThrow) requires (I != 0) {
+    int* end(range<I, NoThrow>& a) noexcept(NoThrow)
+        requires (I != 0)
+    {
         return a.elements_ + 3;
     }
     template <unsigned int I, bool NoThrow>
-    int const* begin(range<I, NoThrow> const& a) noexcept(NoThrow) requires (I != 0) {
+    int const* begin(range<I, NoThrow> const& a) noexcept(NoThrow)
+        requires (I != 0)
+    {
         return a.elements_;
     }
     template <unsigned int I, bool NoThrow>
-    int const* end(range<I, NoThrow> const& a) noexcept(NoThrow) requires (I != 0) {
+    int const* end(range<I, NoThrow> const& a) noexcept(NoThrow)
+        requires (I != 0)
+    {
         return a.elements_ + 3;
     }
 
     template <unsigned int I, bool NoThrow>
-    int* rbegin(range<I, NoThrow>& a) noexcept(NoThrow) requires (I > 2) {
+    int* rbegin(range<I, NoThrow>& a) noexcept(NoThrow)
+        requires (I > 2)
+    {
         return a.elements_;
     }
     template <unsigned int I, bool NoThrow>
-    int* rend(range<I, NoThrow>& a) noexcept(NoThrow) requires (I > 2) {
+    int* rend(range<I, NoThrow>& a) noexcept(NoThrow)
+        requires (I > 2)
+    {
         return a.elements_ + 3;
     }
     template <unsigned int I, bool NoThrow>
-    int const* rbegin(range<I, NoThrow> const& a) noexcept(NoThrow) requires (I > 2) {
+    int const* rbegin(range<I, NoThrow> const& a) noexcept(NoThrow)
+        requires (I > 2)
+    {
         return a.elements_;
     }
     template <unsigned int I, bool NoThrow>
-    int const* rend(range<I, NoThrow> const& a) noexcept(NoThrow) requires (I > 2) {
+    int const* rend(range<I, NoThrow> const& a) noexcept(NoThrow)
+        requires (I > 2)
+    {
         return a.elements_ + 3;
     }
-    // clang-format on
 
     template <class T, bool Nothrow>
     constexpr bool test() {

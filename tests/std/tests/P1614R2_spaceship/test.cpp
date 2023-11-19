@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+#define _SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING
+
 #include <array>
 #include <cassert>
 #include <charconv>
@@ -179,7 +181,7 @@ inline constexpr bool has_synth_ordered<SynthOrdered> = true;
 template <class Container>
 constexpr void ordered_containers_test(
     const Container& smaller, const Container& smaller_equal, const Container& larger) {
-    using Elem = typename Container::value_type;
+    using Elem = Container::value_type;
 
     if constexpr (has_synth_ordered<Elem>) {
         spaceship_test<std::weak_ordering>(smaller, smaller_equal, larger);
@@ -1019,6 +1021,18 @@ void ordering_test_cases() {
 
         spaceship_test<std::strong_ordering>(p1, p2, p4);
         spaceship_test<std::strong_ordering>(p1, p3, p5);
+        spaceship_test<std::strong_ordering>(p1, nullptr, p4);
+    }
+    { // shared_ptr, heterogeneous
+        std::shared_ptr<const int> p1{};
+        std::shared_ptr<void> p2{};
+        std::shared_ptr<volatile int> p3{};
+
+        std::shared_ptr<int> p4{new int};
+
+        spaceship_test<std::strong_ordering>(p1, p2, p4);
+        spaceship_test<std::strong_ordering>(p1, p3, p4);
+        spaceship_test<std::strong_ordering>(p2, p3, p4);
         spaceship_test<std::strong_ordering>(p1, nullptr, p4);
     }
     { // slice

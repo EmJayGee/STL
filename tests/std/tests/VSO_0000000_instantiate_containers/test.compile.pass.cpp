@@ -45,8 +45,6 @@ using namespace std;
 
 #define STATIC_ASSERT(...) static_assert(__VA_ARGS__, #__VA_ARGS__)
 
-int main() {} // COMPILE-ONLY
-
 template <typename Tpl, typename Fx, size_t... Indices>
 void for_each_tuple_element_impl(Tpl&& Tuple, Fx Func, index_sequence<Indices...>) {
     // call Func() on the Indices elements of Tuple
@@ -704,7 +702,6 @@ void extended_math_functions_test(T value) {
     (void) tanh(value);
 }
 
-// TRANSITION, VSO-251998
 // cbegin() calls begin() fully qualified, so cannot
 // find valarray non-member begin().
 

@@ -339,50 +339,6 @@ struct mutex_test_fixture {
 #endif // TRANSITION, GH-1472
     }
 
-    // nonstandard xtime type
-    template <class Rep, class Period>
-    xtime to_xtime(const chrono::duration<Rep, Period>& rel_time) { // convert duration to xtime
-        xtime xt;
-        if (rel_time <= chrono::duration<Rep, Period>::zero()) { // negative or zero relative time, return zero
-            xt.sec  = 0;
-            xt.nsec = 0;
-        } else { // positive relative time, convert
-            chrono::nanoseconds t0 = chrono::system_clock::now().time_since_epoch();
-            t0 += chrono::duration_cast<chrono::nanoseconds>(rel_time);
-            xt.sec = chrono::duration_cast<chrono::seconds>(t0).count();
-            t0 -= chrono::seconds(xt.sec);
-            xt.nsec = static_cast<long>(t0.count());
-        }
-        return xt;
-    }
-
-    void test_timed_lockable_xtime() {
-        assert(time_execution([this] {
-            const auto xt = to_xtime(24h);
-            assert(mtx.try_lock_until(&xt));
-        }) < 1h);
-        mtx.unlock();
-        assert(time_execution([this] {
-            const auto xt = to_xtime(24h);
-            unique_lock<Mutex> ul(mtx, defer_lock);
-            assert(ul.try_lock_until(&xt));
-        }) < 1h);
-
-#if 0 // TRANSITION, GH-1472
-        ot.lock();
-        assert(time_execution([this] {
-            const auto xt = to_xtime(50ms);
-            assert(!mtx.try_lock_until(&xt));
-        }) >= 50ms);
-        assert(time_execution([this] {
-            const auto xt = to_xtime(50ms);
-            unique_lock<Mutex> ul(mtx, defer_lock);
-            assert(!ul.try_lock_until(&xt));
-        }) >= 50ms);
-        ot.unlock();
-#endif // TRANSITION, GH-1472
-    }
-
     void test_recursive_lockable() {
         mtx.lock();
         assert(!ot.try_lock());
@@ -512,6 +468,18 @@ void test_vso_1253916() {
     do_shared_locked_things(shared_lock<shared_mutex>{mtx});
 }
 
+#ifdef _ENABLE_CONSTEXPR_MUTEX_CONSTRUCTOR
+struct test_constexpr_ctor {
+    constexpr test_constexpr_ctor() {}
+    mutex mtx;
+};
+
+test_constexpr_ctor obj;
+#if _HAS_CXX20 && !defined(_M_CEE)
+constinit test_constexpr_ctor obj2;
+#endif // _HAS_CXX20 && !defined(_M_CEE)
+#endif // _ENABLE_CONSTEXPR_MUTEX_CONSTRUCTOR
+
 int main() {
     {
         mutex_test_fixture<mutex> fixture;
@@ -522,7 +490,6 @@ int main() {
         mutex_test_fixture<timed_mutex> fixture;
         fixture.test_lockable();
         fixture.test_timed_lockable();
-        fixture.test_timed_lockable_xtime();
     }
 
     {
@@ -535,7 +502,6 @@ int main() {
         mutex_test_fixture<recursive_timed_mutex> fixture;
         fixture.test_lockable();
         fixture.test_timed_lockable();
-        fixture.test_timed_lockable_xtime();
         fixture.test_recursive_lockable();
     }
 

@@ -37,7 +37,6 @@ struct int128 {
 
 template <bool AddViaCas, typename ValueType>
 void test_ops() {
-#ifndef _M_CEE // TRANSITION, VSO-1659408
     constexpr std::size_t unique      = 80; // small to avoid overflow even for char
     constexpr std::size_t repetitions = 8000;
     constexpr std::size_t total       = unique * repetitions;
@@ -45,7 +44,8 @@ void test_ops() {
 
     struct alignas(std::atomic_ref<ValueType>::required_alignment) Padded {
         ValueType vals[unique] = {};
-    } padded;
+    };
+    Padded padded;
 
     auto& vals = padded.vals;
 
@@ -62,7 +62,7 @@ void test_ops() {
     auto load  = [](const std::atomic_ref<ValueType>& ref) { return static_cast<int>(ref.load()); };
     auto xchg0 = [](std::atomic_ref<ValueType>& ref) { return static_cast<int>(ref.exchange(0)); };
 
-    int (*inc)(std::atomic_ref<ValueType> & ref);
+    int (*inc)(std::atomic_ref<ValueType>& ref);
     if constexpr (AddViaCas) {
         inc = [](std::atomic_ref<ValueType>& ref) {
             for (;;) {
@@ -84,7 +84,6 @@ void test_ops() {
     assert(std::transform_reduce(par, refs.begin(), refs.end(), 0, std::plus{}, load) == range * repetitions * 2);
     assert(std::transform_reduce(par, refs.begin(), refs.end(), 0, std::plus{}, xchg0) == range * 2);
     assert(std::transform_reduce(par, refs.begin(), refs.end(), 0, std::plus{}, load) == 0);
-#endif // _M_CEE
 }
 
 template <class Integer>

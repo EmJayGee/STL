@@ -21,8 +21,6 @@
 using std::output_iterator_tag, std::input_iterator_tag, std::forward_iterator_tag, std::bidirectional_iterator_tag,
     std::random_access_iterator_tag, std::contiguous_iterator_tag;
 
-int main() {} // COMPILE-ONLY
-
 void test_LWG_3470() {
     // LWG-3470 relaxed the "convertible-to-non-slicing" requirements to allow this non-slicing case
     int a[]                 = {1, 2, 3};
@@ -70,23 +68,24 @@ namespace test_view_interface {
     using test::CanCompare, test::CanDifference, test::Common, test::ProxyRef, test::to_bool;
     enum class ConstRange : bool { no, yes };
 
-    // clang-format off
     template <class Cat, Common IsCommon, CanDifference Diff, ConstRange HasConstRange>
     struct fake_view : ranges::view_interface<fake_view<Cat, IsCommon, Diff, HasConstRange>> {
         using I = test::iterator<Cat, int, Diff, CanCompare::yes, ProxyRef::no>;
         using S = std::conditional_t<to_bool(IsCommon), I, test::sentinel<int>>;
 
         I begin();
-        I begin() const requires (to_bool(HasConstRange));
+        I begin() const
+            requires (to_bool(HasConstRange));
 
         S end();
-        S end() const requires (to_bool(HasConstRange));
+        S end() const
+            requires (to_bool(HasConstRange));
 
-        unsigned int size() requires (to_bool(Diff) && !std::derived_from<Cat, forward_iterator_tag>);
-        unsigned int size() const requires (to_bool(HasConstRange) && to_bool(Diff)
-            && !std::derived_from<Cat, forward_iterator_tag>);
+        unsigned int size()
+            requires (to_bool(Diff) && !std::derived_from<Cat, forward_iterator_tag>);
+        unsigned int size() const
+            requires (to_bool(HasConstRange) && to_bool(Diff) && !std::derived_from<Cat, forward_iterator_tag>);
     };
-    // clang-format on
 
     namespace output_unsized_onlymutable {
         using V = fake_view<output_iterator_tag, Common::no, CanDifference::no, ConstRange::no>;
@@ -972,13 +971,13 @@ namespace test_subrange {
 
     template <class R>
     concept HasMemberEmpty = requires(std::remove_reference_t<R> const r) {
-                                 { r.empty() } -> same_as<bool>;
-                             };
+        { r.empty() } -> same_as<bool>;
+    };
 
     template <class R>
     concept HasMemberSize = requires(std::remove_reference_t<R> const r) {
-                                { r.size() } -> std::integral;
-                            };
+        { r.size() } -> std::integral;
+    };
 
     // Validate default template arguments: second defaults to first, and third defaults to subrange_kind::sized iff
     // sized_sentinel_for<second, first>.
@@ -1037,6 +1036,15 @@ namespace test_subrange {
         STATIC_ASSERT(range<Subrange>);
         STATIC_ASSERT(HasMemberEmpty<Subrange const>);
         STATIC_ASSERT(!copyable<I> || range<Subrange const&>);
+
+#if _HAS_CXX23 // Validate cbegin/cend
+        if constexpr (ranges::input_range<Subrange>) {
+            STATIC_ASSERT(CanMemberCBegin<Subrange>);
+            STATIC_ASSERT(CanMemberCBegin<const Subrange> == ranges::input_range<const Subrange&>);
+            STATIC_ASSERT(CanMemberCEnd<Subrange>);
+            STATIC_ASSERT(CanMemberCEnd<const Subrange> == ranges::input_range<const Subrange&>);
+        }
+#endif // _HAS_CXX23
 
         // Validate size
         STATIC_ASSERT(sized == HasMemberSize<Subrange>);

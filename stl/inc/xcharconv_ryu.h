@@ -32,11 +32,14 @@
 // DEALINGS IN THE SOFTWARE.
 
 
-#pragma once
 #ifndef _XCHARCONV_RYU_H
 #define _XCHARCONV_RYU_H
 #include <yvals_core.h>
 #if _STL_COMPILER_PREPROCESSOR
+
+#if !_HAS_CXX17
+#error The contents of <charconv> are only available with C++17. (Also, you should not include this internal header.)
+#endif // !_HAS_CXX17
 
 #include <cstring>
 #include <type_traits>
@@ -54,10 +57,6 @@
 #if _HAS_CHARCONV_INTRINSICS
 #include _STL_INTRIN_HEADER // for _umul128() and __shiftright128()
 #endif // ^^^ intrinsics available ^^^
-
-#if !_HAS_CXX17
-#error The contents of <charconv> are only available with C++17. (Also, you should not include this internal header.)
-#endif // !_HAS_CXX17
 
 #pragma pack(push, _CRT_PACKING)
 #pragma warning(push, _STL_WARNING_LEVEL)
@@ -904,7 +903,7 @@ _NODISCARD inline to_chars_result __d2exp_buffered_n(char* _First, char* const _
         __roundUp = 1;
       } else {
         if (__roundUp == 1 || __c % 2 != 0) {
-          _Round[0] = __c + 1;
+          _Round[0] = static_cast<char>(__c + 1);
         }
         break;
       }
@@ -1318,7 +1317,7 @@ _NODISCARD pair<_CharT*, errc> __to_chars(_CharT* const _First, _CharT* const _L
   chars_format _Fmt, const uint32_t __ieeeMantissa, const uint32_t __ieeeExponent) {
   // Step 5: Print the decimal representation.
   uint32_t _Output = __v.__mantissa;
-  int32_t _Ryu_exponent = __v.__exponent;
+  const int32_t _Ryu_exponent = __v.__exponent;
   const uint32_t __olength = __decimalLength9(_Output);
   int32_t _Scientific_exponent = _Ryu_exponent + static_cast<int32_t>(__olength) - 1;
 
@@ -1926,7 +1925,7 @@ _NODISCARD pair<_CharT*, errc> __to_chars(_CharT* const _First, _CharT* const _L
   chars_format _Fmt, const double __f) {
   // Step 5: Print the decimal representation.
   uint64_t _Output = __v.__mantissa;
-  int32_t _Ryu_exponent = __v.__exponent;
+  const int32_t _Ryu_exponent = __v.__exponent;
   const uint32_t __olength = __decimalLength17(_Output);
   int32_t _Scientific_exponent = _Ryu_exponent + static_cast<int32_t>(__olength) - 1;
 

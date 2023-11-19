@@ -41,12 +41,6 @@ namespace ordtest {
 #define CONSTEVAL constexpr
 #endif // ^^^ !_HAS_CXX20 ^^^
 
-#if _HAS_CXX20 && !defined(__clang__) // TRANSITION, LLVM-51840
-#define CONSTEVAL_CLANG_WORKAROUND consteval
-#else // ^^^ _HAS_CXX20 && !defined(__clang__) / !_HAS_CXX20 || defined(__clang__) vvv
-#define CONSTEVAL_CLANG_WORKAROUND constexpr
-#endif // ^^^ !_HAS_CXX20 || defined(__clang__) ^^^
-
 using std::_Signed128;
 using std::_Unsigned128;
 
@@ -62,7 +56,7 @@ namespace i128_udl_detail {
         _Unsigned128 value;
     };
 
-    [[nodiscard]] CONSTEVAL_CLANG_WORKAROUND unsigned int char_to_digit(const char c) noexcept {
+    [[nodiscard]] CONSTEVAL unsigned int char_to_digit(const char c) noexcept {
         if (c >= '0' && c <= '9') {
             return static_cast<unsigned int>(c - '0');
         }
@@ -132,7 +126,7 @@ namespace i128_udl_detail {
 } // namespace i128_udl_detail
 
 template <char... Chars>
-[[nodiscard]] CONSTEVAL _Unsigned128 operator"" _u128() noexcept {
+[[nodiscard]] CONSTEVAL _Unsigned128 operator""_u128() noexcept {
     constexpr auto parsed_result = i128_udl_detail::parse_u128<Chars...>::parse();
     static_assert(parsed_result.status_code != i128_udl_detail::u128_parse_status::invalid,
         "Invalid characters in the integer literal");
@@ -142,7 +136,7 @@ template <char... Chars>
 }
 
 template <char... Chars>
-[[nodiscard]] CONSTEVAL _Signed128 operator"" _i128() noexcept {
+[[nodiscard]] CONSTEVAL _Signed128 operator""_i128() noexcept {
     constexpr auto parsed_result = i128_udl_detail::parse_u128<Chars...>::parse();
     static_assert(parsed_result.status_code != i128_udl_detail::u128_parse_status::invalid,
         "Invalid characters in the integer literal");
@@ -193,9 +187,15 @@ constexpr bool test_unsigned() {
     STATIC_ASSERT(std::three_way_comparable<_Unsigned128, ordtest::strong_ordering>);
 #endif // __cpp_lib_concepts
 
+    STATIC_ASSERT(std::numeric_limits<_Unsigned128>::is_specialized);
+    STATIC_ASSERT(std::numeric_limits<_Unsigned128>::is_exact);
+    STATIC_ASSERT(std::numeric_limits<_Unsigned128>::is_integer);
+    STATIC_ASSERT(!std::numeric_limits<_Unsigned128>::is_signed);
+    STATIC_ASSERT(std::numeric_limits<_Unsigned128>::is_bounded);
     STATIC_ASSERT(std::numeric_limits<_Unsigned128>::min() == 0);
     STATIC_ASSERT(std::numeric_limits<_Unsigned128>::max() == ~_Unsigned128{});
     STATIC_ASSERT(std::numeric_limits<_Unsigned128>::digits == 128);
+    STATIC_ASSERT(std::numeric_limits<_Unsigned128>::radix == 2);
     STATIC_ASSERT(std::numeric_limits<_Unsigned128>::is_modulo);
 
     STATIC_ASSERT(SAME_AS<std::common_type_t<bool, _Unsigned128>, _Unsigned128>);
@@ -528,9 +528,15 @@ constexpr bool test_signed() {
     STATIC_ASSERT(std::three_way_comparable<_Signed128, ordtest::strong_ordering>);
 #endif // __cpp_lib_concepts
 
+    STATIC_ASSERT(std::numeric_limits<_Signed128>::is_specialized);
+    STATIC_ASSERT(std::numeric_limits<_Signed128>::is_exact);
+    STATIC_ASSERT(std::numeric_limits<_Signed128>::is_integer);
+    STATIC_ASSERT(std::numeric_limits<_Signed128>::is_signed);
+    STATIC_ASSERT(std::numeric_limits<_Signed128>::is_bounded);
     STATIC_ASSERT(std::numeric_limits<_Signed128>::min() == _Signed128{0, 1ull << 63});
     STATIC_ASSERT(std::numeric_limits<_Signed128>::max() == _Signed128{~0ull, ~0ull >> 1});
     STATIC_ASSERT(std::numeric_limits<_Signed128>::digits == 127);
+    STATIC_ASSERT(std::numeric_limits<_Signed128>::radix == 2);
     STATIC_ASSERT(!std::numeric_limits<_Signed128>::is_modulo);
 
     STATIC_ASSERT(SAME_AS<std::common_type_t<bool, _Signed128>, _Signed128>);
@@ -736,7 +742,7 @@ constexpr bool test_signed() {
         assert(product._Word[1] == 0x05050505'05050505);
     }
     {
-        auto product = _Signed128{0x01010101'01010101, 0x01010101'01010101};
+        _Signed128 product{0x01010101'01010101, 0x01010101'01010101};
         product *= product;
         assert(product == 0x100f0e0d'0c0b0a09'08070605'04030201_i128);
         assert(product._Word[0] == 0x08070605'04030201);
@@ -1287,11 +1293,7 @@ constexpr bool test_cross() {
         x = -26;
         TEST(u *= 2, x);
         y = 12;
-#ifdef _M_CEE // TRANSITION, VSO-1658184 (/clr silent bad codegen)
-        i = 12;
-#else // ^^^ workaround / no workaround vvv
         TEST(i *= -2, y);
-#endif // ^^^ no workaround ^^^
 
         x = _Unsigned128{0x55555555'5555554c, 0x55555555'55555555};
         TEST(u /= 3, x); // Yes, u is still unsigned =)

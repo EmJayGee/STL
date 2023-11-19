@@ -25,11 +25,10 @@ using namespace std;
 
 #if defined(__cpp_lib_concepts) // TRANSITION, GH-395
 template <class Ostream, class Alloc = allocator<stacktrace_entry>>
-concept CanPrintStacktrace =
-    requires(Ostream& os, const stacktrace_entry& f, const basic_stacktrace<Alloc>& st) {
-        { os << f } -> same_as<basic_ostream<typename Ostream::char_type, typename Ostream::traits_type>&>;
-        { os << st } -> same_as<basic_ostream<typename Ostream::char_type, typename Ostream::traits_type>&>;
-    };
+concept CanPrintStacktrace = requires(Ostream& os, const stacktrace_entry& f, const basic_stacktrace<Alloc>& st) {
+    { os << f } -> same_as<basic_ostream<typename Ostream::char_type, typename Ostream::traits_type>&>;
+    { os << st } -> same_as<basic_ostream<typename Ostream::char_type, typename Ostream::traits_type>&>;
+};
 
 template <class CharT>
 struct FancyCharTraits : char_traits<CharT> {};
@@ -156,6 +155,11 @@ string to_string_using_stream(const stacktrace& st) {
 string to_string_using_to_string(const stacktrace& st) {
     return to_string(st) + "\n";
 }
+
+#if !defined(HAS_DEBUG_INFO) && defined(__SANITIZE_ADDRESS__)
+// We always use /Zi with -fsanitize=address
+#define HAS_DEBUG_INFO
+#endif // ^^^ !defined(HAS_DEBUG_INFO) && defined(__SANITIZE_ADDRESS__) ^^^
 
 #if defined(HAS_DEBUG_INFO) || defined(HAS_EXPORT)
 #define HAS_NAMES
